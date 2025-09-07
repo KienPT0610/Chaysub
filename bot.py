@@ -10,7 +10,7 @@ from utils import load_allowed_users, add_allowed_user, countdown, remove_allowe
 
 # load environment variables
 load_dotenv()
-TOKEN = os.getenv("BOT_TOKEN")
+TOKEN = os.getenv("BOT1_TOKEN")
 CHAYSUB_TOKEN = os.getenv("CHAYSUB_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID"))
 # Initialize Class 
