@@ -65,9 +65,6 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await query.answer()
     if query.data == 'start':
       balance = getBalanceInfo(update.effective_user.id)
-      if balance == 0:
-          await query.edit_message_text(text="Lỗi: Không thể lấy thông tin số dư.")
-          return
       keyboard = [
           [InlineKeyboardButton("Tiktok", callback_data='tiktok')],
           [InlineKeyboardButton("Facebook", callback_data='facebook')],
