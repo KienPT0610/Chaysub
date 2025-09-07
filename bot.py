@@ -6,11 +6,11 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 from chaysub import ChaySub
 import time
-from utils import load_allowed_users, add_allowed_user, countdown, remove_allowed_user
+from utils import load_allowed_users, add_allowed_user, countdown, remove_allowed_user, getBalanceInfo, addBalance
 
 # load environment variables
 load_dotenv()
-TOKEN = os.getenv("BOT1_TOKEN")
+TOKEN = os.getenv("BOT_TOKEN")
 CHAYSUB_TOKEN = os.getenv("CHAYSUB_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID"))
 # Initialize Class 
@@ -34,6 +34,7 @@ async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text("Bạn không có quyền sử dụng bot này.")
         return
 
+    status, result = chaysub.getBalance()
     keyboard = [
         [InlineKeyboardButton("Thêm người dùng", callback_data='add_user')],
         [InlineKeyboardButton("Thêm số dư cho người dùng", callback_data='add_balance')],
@@ -42,7 +43,7 @@ async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         [InlineKeyboardButton("Quay lại", callback_data='start')],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text('Chọn chức năng bạn muốn:', reply_markup=reply_markup)
+    await update.message.reply_text(text=f'Số dư: {result.get("balance", "NaN")} {result.get("currency", "VNĐ")}\nChọn chức năng bạn muốn:', reply_markup=reply_markup)
 
 async def getId(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
@@ -63,14 +64,17 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
     if query.data == 'start':
-      status, result = chaysub.getBalance()
+      balance = getBalanceInfo(update.effective_user.id)
+      if balance == 0:
+          await query.edit_message_text(text="Lỗi: Không thể lấy thông tin số dư.")
+          return
       keyboard = [
           [InlineKeyboardButton("Tiktok", callback_data='tiktok')],
           [InlineKeyboardButton("Facebook", callback_data='facebook')],
       ]
       reply_markup = InlineKeyboardMarkup(keyboard)
       await query.edit_message_text(
-        text=f'Số dư: {result.get("balance", "NaN")} {result.get("currency", "VNĐ")}\nChọn dịch vụ bạn muốn:',
+        text=f'Số dư: {balance} VNĐ\nChọn dịch vụ bạn muốn:',
         reply_markup=reply_markup
       )
 
@@ -79,12 +83,12 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
       context.user_data['waiting_for_user_id'] = True
 
     elif query.data == 'view_users':
-      users = load_allowed_users()
-      if users:
-          user_list = "\n".join(str(user) for user in users)
-          await query.edit_message_text(text=f"Danh sách người dùng được phép:\n{user_list}")
-      else:
-          await query.edit_message_text(text="Chưa có người dùng nào được phép.")
+        users = load_allowed_users()
+        if not users:
+            await query.edit_message_text(text="Chưa có người dùng nào được phép.")
+            return
+        user_list = "\n".join([f"{user_id} - {getBalanceInfo(user_id)} VNĐ" for user_id in users])
+        await query.edit_message_text(text=f"Người dùng được phép:\n{user_list}")
 
     elif query.data == 'tiktok':
       keyboard = [
@@ -114,6 +118,52 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
       await query.edit_message_text(text='Chọn loại dịch vụ muốn buff!', reply_markup=reply_markup)
 
     elif query.data.startswith('tiktok_view_'):
+      service_id = query.data.split('_')[-1]
+      await query.edit_message_text(text='Vui lòng gửi link video TikTok bạn muốn buff dưới dạng tin nhắn:')
+      context.user_data['waiting_for_link'] = True
+      context.user_data['service_id'] = service_id
+
+    elif query.data == 'tiktok_follow':
+        services = chaysub.getListServiceByCategoryAndName("Tiktok Buff Sub", "follow")
+        if not services:
+            await query.edit_message_text(text="Không tìm thấy dịch vụ Tiktok Follow.")
+            return
+        keyboard = []
+        for service in services:
+            service_id = service.get("service")
+            # name = service.get("name")
+            rate = service.get("rate")
+            min = service.get("min")
+            max = service.get("max")
+            keyboard.append([InlineKeyboardButton(f"[{service_id}] (Min: {min}, Max: {max}) - {rate}đ", callback_data=f'tiktok_follow_{service_id}')])
+        keyboard.append([InlineKeyboardButton("Quay lại", callback_data='tiktok')])
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(text='Chọn loại dịch vụ muốn buff!', reply_markup=reply_markup)
+
+    elif query.data.startswith('tiktok_follow_'):
+      service_id = query.data.split('_')[-1]
+      await query.edit_message_text(text='Vui lòng gửi link profile TikTok bạn muốn buff dưới dạng tin nhắn:')
+      context.user_data['waiting_for_link'] = True
+      context.user_data['service_id'] = service_id
+
+    elif query.data == 'tiktok_heart':
+        services = chaysub.getListServiceByCategoryAndName("Tiktok Buff Like", "like")
+        if not services:
+            await query.edit_message_text(text="Không tìm thấy dịch vụ Tiktok Like.")
+            return
+        keyboard = []
+        for service in services:
+            service_id = service.get("service")
+            # name = service.get("name")
+            rate = service.get("rate")
+            min = service.get("min")
+            max = service.get("max")
+            keyboard.append([InlineKeyboardButton(f"[{service_id}] (Min: {min}, Max: {max}) - {rate}đ", callback_data=f'tiktok_heart_{service_id}')])
+        keyboard.append([InlineKeyboardButton("Quay lại", callback_data='tiktok')])
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(text='Chọn loại dịch vụ muốn buff!', reply_markup=reply_markup)
+
+    elif query.data.startswith('tiktok_heart_'):
       service_id = query.data.split('_')[-1]
       await query.edit_message_text(text='Vui lòng gửi link video TikTok bạn muốn buff dưới dạng tin nhắn:')
       context.user_data['waiting_for_link'] = True
@@ -152,8 +202,25 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
           await query.edit_message_text(text=f"✅ Đã xóa người dùng với ID: {user_id}")
       else:
           await query.edit_message_text(text=f"⚠️ Không tìm thấy người dùng với ID: {user_id}")
-      
 
+    elif query.data == 'add_balance':
+      # lay danh sách user
+      users = load_allowed_users()
+      if not users:
+          await query.edit_message_text(text="Chưa có người dùng nào được phép.")
+          return
+      keyboard = []
+      for user_id in users:
+          keyboard.append([InlineKeyboardButton(f"Nạp cho {user_id}", callback_data=f'addbal_{user_id}')])
+      keyboard.append([InlineKeyboardButton("Quay lại", callback_data='admin')])
+      reply_markup = InlineKeyboardMarkup(keyboard)
+      await query.edit_message_text(text='Chọn người dùng bạn muốn nạp số dư:', reply_markup=reply_markup)
+
+    elif query.data.startswith('addbal_'):
+      user_id = int(query.data.split('_')[-1])
+      await query.edit_message_text(text=f'Vui lòng gửi số tiền bạn muốn nạp cho người dùng {user_id} dưới dạng tin nhắn:')
+      context.user_data['waiting_for_balance'] = True
+      context.user_data['target_user_id'] = user_id
 
 # Buff function
 async def buff(update: Update, context: ContextTypes.DEFAULT_TYPE, object_id: str, quantity: int):
@@ -187,6 +254,10 @@ async def payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Lỗi: Không thể lấy giá dịch vụ.")
         return
     price = int(round(amount * quantity))
+    balance = getBalanceInfo(update.effective_user.id)
+    if balance < price:
+        await update.message.reply_text(f"Số dư của bạn không đủ để thực hiện giao dịch này. Vui lòng nạp thêm tiền.\nSố dư hiện tại: {balance} VNĐ, Giá dịch vụ: {price} VNĐ")
+        return
     view_order = f"Service: {service_id}\nLink: {object_id}\nSố lượng: {quantity}"
     await update.message.reply_text(f"Xác nhận {view_order}\nThanh toán {price} VNĐ để tiếp tục?", reply_markup=reply_markup)
 
@@ -224,13 +295,35 @@ async def handle_user_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
             new_user_id = int(update.message.text.strip())
             if new_user_id <= 0:
                 raise ValueError("ID người dùng phải là số nguyên dương.")
-            if add_allowed_user(new_user_id):
+            if add_allowed_user(new_user_id, 0):
                 await update.message.reply_text(f"✅ Đã thêm người dùng với ID: {new_user_id}")
             else:
                 await update.message.reply_text(f"⚠️ Người dùng với ID: {new_user_id} đã tồn tại.")
             context.user_data['waiting_for_user_id'] = False
         except ValueError:
             await update.message.reply_text("ID người dùng không hợp lệ. Vui lòng gửi lại ID hợp lệ:")
+    elif context.user_data.get('waiting_for_balance'):
+        try:
+            amount = int(update.message.text.strip())
+            if amount <= 0:
+                raise ValueError("Số tiền phải là số nguyên dương.")
+            target_user_id = context.user_data.get('target_user_id')
+            status, result = chaysub.getBalance() # lay so du bot
+            if int(result.get("balance", 0)) < int(amount): # so sanh voi so du bot
+                await update.message.reply_text(f"Số dư của bot không đủ để nạp số tiền này. Vui lòng nạp thêm tiền vào bot.\nSố dư hiện tại của bot: {result.get('balance', 0)} VNĐ")
+                context.user_data['waiting_for_balance'] = False
+                return
+            if not target_user_id:
+                await update.message.reply_text("Lỗi: ID người dùng không hợp lệ.")
+                context.user_data['waiting_for_balance'] = False
+                return
+            if addBalance(target_user_id, amount):
+                await update.message.reply_text(f"✅ Đã nạp {amount} VNĐ cho người dùng với ID: {target_user_id}")
+            else:
+                await update.message.reply_text(f"⚠️ Không tìm thấy người dùng với ID: {target_user_id}.")
+            context.user_data['waiting_for_balance'] = False
+        except ValueError:
+            await update.message.reply_text("Số tiền không hợp lệ. Vui lòng gửi lại số tiền hợp lệ:")
     else:
         await update.message.reply_text("Vui lòng nhấn /start để bắt đầu.")
 
