@@ -64,7 +64,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
     if query.data == 'start':
-      balance = getBalanceInfo(update.effective_user.id)
+      balance = getBalanceInfo(int(update.effective_user.id))
       keyboard = [
           [InlineKeyboardButton("Tiktok", callback_data='tiktok')],
           [InlineKeyboardButton("Facebook", callback_data='facebook')],
