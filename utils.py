@@ -35,20 +35,39 @@ def addBalance(user_id: int, amount: int) -> bool:
                 return True
     return False  # Trả về False nếu không tìm thấy người dùng
 
-def add_allowed_user(user_id):
-  users = load_allowed_users()
-  if user_id not in users:
-    users.append(user_id)
-    with open('users.json', 'w') as f:
-      json.dump({"allowed_users": users}, f)
-    return True
-  return False
+def save_allowed_users(users):
+    with open('users.json', 'w', encoding='utf-8') as f:
+        json.dump({"allowed_users": users}, f, ensure_ascii=False, indent=2)
 
-def remove_allowed_user(user_id):
-  users = load_allowed_users()
-  if user_id in users:
-    users.remove(user_id)
-    with open('users.json', 'w') as f:
-      json.dump({"allowed_users": users}, f)
+def add_allowed_user(user_id: int, balance: int = 0) -> bool:
+    users = load_allowed_users()
+    
+    # Nếu users là list chứa các int cũ, chuyển đổi hết về dạng dict
+    updated_users = []
+    for user in users:
+        if isinstance(user, int):  # Dữ liệu kiểu cũ
+            updated_users.append({"id": str(user), "balance": 0})
+        elif isinstance(user, dict):
+            updated_users.append(user)
+    
+    # Kiểm tra trùng lặp
+    for user in updated_users:
+        if str(user["id"]) == str(user_id):
+            return False  # Đã tồn tại
+
+    # Thêm người dùng mới
+    updated_users.append({"id": str(user_id), "balance": balance})
+    save_allowed_users(updated_users)
     return True
-  return False
+
+def remove_allowed_user(user_id: int) -> bool:
+    # truy cập vào file users.json và sửa
+    with open('users.json', 'r', encoding='utf-8') as f:
+        data = json.load(f)
+        users = data.get("allowed_users", [])
+        updated_users = [user for user in users if str(user["id"]) != str(user_id)]
+        if len(updated_users) == len(users):
+            return False  # Không tìm thấy người dùng để xóa
+    with open('users.json', 'w', encoding='utf-8') as f:
+        json.dump({"allowed_users": updated_users}, f, ensure_ascii=False, indent=2)
+    return True

@@ -10,7 +10,7 @@ from utils import load_allowed_users, add_allowed_user, countdown, remove_allowe
 
 # load environment variables
 load_dotenv()
-TOKEN = os.getenv("BOT1_TOKEN")
+TOKEN = os.getenv("BOT_TOKEN")
 CHAYSUB_TOKEN = os.getenv("CHAYSUB_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID"))
 # Initialize Class 
@@ -295,7 +295,7 @@ async def handle_user_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
             new_user_id = int(update.message.text.strip())
             if new_user_id <= 0:
                 raise ValueError("ID người dùng phải là số nguyên dương.")
-            if add_allowed_user(new_user_id):
+            if add_allowed_user(new_user_id, 0):
                 await update.message.reply_text(f"✅ Đã thêm người dùng với ID: {new_user_id}")
             else:
                 await update.message.reply_text(f"⚠️ Người dùng với ID: {new_user_id} đã tồn tại.")
