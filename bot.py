@@ -6,7 +6,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 from chaysub import ChaySub
 import time
-from utils import load_allowed_users, add_allowed_user, countdown, remove_allowed_user, getBalanceInfo, addBalance
+from utils import load_allowed_users, add_allowed_user, countdown, remove_allowed_user, getBalanceInfo, addBalance, updateBalance
 
 # load environment variables
 load_dotenv()
@@ -176,6 +176,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
           await query.edit_message_text(text="Lỗi: Thiếu thông tin đơn hàng.")
           return
       await query.edit_message_text(text="✅ Thanh toán thành công! Đang tạo đơn hàng...")
+      updateBalance(update.effective_user.id, context.user_data.get('new_balance', 0))
       await buff(update, context, object_id, quantity)
 
     elif query.data == 'cancel':
@@ -256,6 +257,7 @@ async def payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"Số dư của bạn không đủ để thực hiện giao dịch này. Vui lòng nạp thêm tiền.\nSố dư hiện tại: {balance} VNĐ, Giá dịch vụ: {price} VNĐ")
         return
     view_order = f"Service: {service_id}\nLink: {object_id}\nSố lượng: {quantity}"
+    context.user_data['new_balance'] = balance - price
     await update.message.reply_text(f"Xác nhận {view_order}\nThanh toán {price} VNĐ để tiếp tục?", reply_markup=reply_markup)
 
 # Handler

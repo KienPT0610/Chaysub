@@ -35,6 +35,17 @@ def addBalance(user_id: int, amount: int) -> bool:
                 return True
     return False  # Trả về False nếu không tìm thấy người dùng
 
+def updateBalance(user_id: int, new_balance: int) -> bool:
+    with open("users.json", "r", encoding="utf-8") as f:
+        data = json.load(f)
+        for user in data["allowed_users"]:
+            if str(user["id"]) == str(user_id):
+                user["balance"] = new_balance
+                with open("users.json", "w", encoding="utf-8") as fw:
+                    json.dump(data, fw, ensure_ascii=False, indent=4)
+                return True
+    return False  # Trả về False nếu không tìm thấy người dùng
+
 def save_allowed_users(users):
     with open('users.json', 'w', encoding='utf-8') as f:
         json.dump({"allowed_users": users}, f, ensure_ascii=False, indent=2)
