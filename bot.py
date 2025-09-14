@@ -116,7 +116,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     elif query.data.startswith('tiktok_view_'):
       service_id = query.data.split('_')[-1]
-      await query.edit_message_text(text='Vui lòng gửi link video TikTok bạn muốn buff dưới dạng tin nhắn:')
+      await query.edit_message_text(text='Vui lòng gửi danh sách link video TikTok bạn muốn buff mỗi link trên một dòng:')
       context.user_data['waiting_for_link'] = True
       context.user_data['service_id'] = service_id
 
@@ -228,7 +228,7 @@ async def buff(update: Update, context: ContextTypes.DEFAULT_TYPE, object_id: st
         await message.reply_text("Lỗi: ID dịch vụ không hợp lệ.")
         return
 
-    await message.reply_text(f"Đang tạo đơn hàng cho link: {object_id} với số lượng: {quantity}")
+    # await message.reply_text(f"Đang tạo đơn hàng cho link: {object_id} với số lượng: {quantity}")
     status, result = chaysub.create_order(service_id, object_id, quantity)
     if status == 200:
         order_id = result.get("order", "N/A")
@@ -260,31 +260,63 @@ async def payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['new_balance'] = balance - price
     await update.message.reply_text(f"Xác nhận {view_order}\nThanh toán {price} VNĐ để tiếp tục?", reply_markup=reply_markup)
 
+# thanh toán thẳng không cần xác nhận
+async def payment2(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    service_id = context.user_data.get('service_id')
+    object_id = context.user_data.get('object_id') 
+    quantity = context.user_data.get('quantity')
+    # get amount for service
+    amount = chaysub.getServicePrice(service_id)
+    if amount == 0:
+        await update.message.reply_text("Lỗi: Không thể lấy giá dịch vụ.")
+        return
+    price = int(round(amount * quantity))
+    balance = getBalanceInfo(update.effective_user.id)
+    if balance < price:
+        await update.message.reply_text(f"Số dư của bạn không đủ để thực hiện giao dịch này. Vui lòng nạp thêm tiền.\nSố dư hiện tại: {balance} VNĐ, Giá dịch vụ: {price} VNĐ")
+        return
+    view_order = f"Service: {service_id}\nLink: {object_id}\nSố lượng: {quantity}"
+    context.user_data['new_balance'] = balance - price
+    await update.message.reply_text(f"Thanh toán thành công {price} VNĐ cho đơn hàng:\n{view_order}")
+    updateBalance(update.effective_user.id, context.user_data.get('new_balance', 0))
+    await buff(update, context, object_id, quantity)
+
+
 # Handler
 async def handle_user_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.user_data.get('waiting_for_link'):
-        object_id = update.message.text.strip() # get link from user
+        object_ids = update.message.text.strip().split("\n")  # get links from user
+        # print danh sach link
+        print("Received links:", object_ids)
+        if not object_ids:
+            await update.message.reply_text("Link không hợp lệ. Vui lòng gửi lại danh sách link TikTok hợp lệ:")
+            return
         # check valid link tiktok
-        if "tiktok.com" not in object_id:
-            await update.message.reply_text("Link không hợp lệ. Vui lòng gửi lại link TikTok hợp lệ:")
+        if not all("tiktok.com" in obj for obj in object_ids):
+            await update.message.reply_text("Link không hợp lệ. Vui lòng gửi lại danh sách link TikTok hợp lệ:")
             return
         context.user_data['waiting_for_link'] = False
-        context.user_data['object_id'] = object_id
+        context.user_data['object_ids'] = object_ids
         await update.message.reply_text("Vui lòng gửi số lượng bạn muốn buff:")
         context.user_data['waiting_for_quantity'] = True
     elif context.user_data.get('waiting_for_quantity'):
         try:
-            quantity = int(update.message.text.strip())
+            quantity = int(update.message.text.strip()) 
             if quantity <= 0:
                 raise ValueError("Số lượng phải là số nguyên dương.")
-            object_id = context.user_data.get('object_id')
-            if not object_id:
+            object_ids = context.user_data.get('object_ids')
+            if not object_ids:
                 await update.message.reply_text("Lỗi: Link không hợp lệ.")
                 context.user_data['waiting_for_quantity'] = False
                 return
             context.user_data['quantity'] = quantity
-            # Proceed to payment confirmation
-            await payment(update, context) 
+            # Thanh toán cho từng link
+            for object_id in object_ids:
+                context.user_data['object_id'] = object_id
+                # await update.message.reply_text(f"Chuẩn bị thanh toán cho link: {object_id} với số lượng: {quantity}")
+                await payment2(update, context) 
+                # Thêm delay giữa các đơn hàng để tránh spam
+                await asyncio.sleep(5)  # delay 5 giây giữa các đơn hàng
             # await buff(update, context, object_id, quantity)
             context.user_data['waiting_for_quantity'] = False
         except ValueError:
